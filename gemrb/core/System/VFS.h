@@ -17,6 +17,7 @@
 
 #include "fmt/format.h"
 
+#include <ctime>
 #include <string>
 
 #ifdef WIN32
@@ -48,6 +49,10 @@ GEM_EXPORT path_t BundlePath(BundleDirectory dir = BUNDLE);
 #ifdef WIN32
 const char PathDelimiter = '\\';
 const char16_t PathDelimiterW = u'\\';
+const char PathListSeparator = ';';
+#elif defined(AMIGA)
+const char PathDelimiter = '/';
+const char16_t PathDelimiterW = u'/';
 const char PathListSeparator = ';';
 #else
 const char PathDelimiter = '/';
@@ -100,10 +105,16 @@ path_t PathJoin(Args const&... args)
 template<bool FixCase = true, typename DIR_T, typename BASE_T, typename EXT_T>
 path_t PathJoinExt(const DIR_T& dir, const BASE_T& base, const EXT_T& ext)
 {
-	path_t path = fmt::to_string(dir) + SPathDelimiter + fmt::to_string(base);
-	if (ext[0] != '\0') {
-		path = path + "." + ext;
+	const path_t dirString = fmt::to_string(dir);
+	path_t filename = fmt::to_string(base);
+	const path_t extension = fmt::to_string(ext);
+	if (!extension.empty()) {
+		filename = filename + "." + extension;
 	}
+
+	path_t path;
+	PathAppend(path, dirString);
+	PathAppend(path, filename);
 
 	if (FixCase) {
 		ResolveCase(path);

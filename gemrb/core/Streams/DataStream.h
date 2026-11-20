@@ -69,18 +69,27 @@ public:
 	DataStream(const DataStream&) = delete;
 	DataStream& operator=(const DataStream&) = delete;
 
-	// FIXME: these should wrap private implementations
-	// so that we can properly swab the read data
-	// if (NeedEndianSwap()) swabs(..., len);
 	virtual strret_t Read(void* dest, strpos_t len) = 0;
 	virtual strret_t Write(const void* src, strpos_t len) = 0;
+
+	template<typename T>
+	static inline void SwapEndianScalar(T& value)
+	{
+		unsigned char* p = reinterpret_cast<unsigned char*>(&value);
+
+		for (size_t i = 0; i < sizeof(T) / 2; ++i) {
+			const unsigned char tmp = p[i];
+			p[i] = p[sizeof(T) - 1 - i];
+			p[sizeof(T) - 1 - i] = tmp;
+		}
+	}
 
 	template<typename T>
 	strret_t ReadScalar(T& dest)
 	{
 		strret_t len = Read(&dest, sizeof(T));
 		if (NeedEndianSwap()) {
-			swabs(&dest, sizeof(T));
+			SwapEndianScalar(dest);
 		}
 		return len;
 	}
@@ -108,15 +117,13 @@ public:
 	template<typename T>
 	strret_t WriteScalar(const T& src)
 	{
-		strret_t len;
 		if (NeedEndianSwap()) {
-			T tmp;
-			swab_const(&src, &tmp, sizeof(T));
-			len = Write(&tmp, sizeof(T));
-		} else {
-			len = Write(&src, sizeof(T));
+			T tmp = src;
+			SwapEndianScalar(tmp);
+			return Write(&tmp, sizeof(T));
 		}
-		return len;
+
+		return Write(&src, sizeof(T));
 	}
 
 	template<typename SRC, typename DST>

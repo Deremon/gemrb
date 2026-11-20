@@ -72,13 +72,13 @@ def InitOptionButton(Window, Index, HotKey = True):
 	if HotKey:
 		Button.SetHotKey (Index, True)
 		
-	# this variable isnt used anywhere (tho it might be useful to use it for knowing what window is open)
+	# this variable isn't used anywhere (though it might be useful to use it for knowing what window is open)
 	# however, we still need to set one because we do depend on the button having a value
 	Button.SetVarAssoc ("OPT_BTN", OptionControl[Index])
 
 	return Button
 
-def SetupMenuWindowControls (Window, Gears = None, CloseWindowCallback = None):
+def SetupMenuWindowControls (Window, Gears = None):
 	"""Binds all of the basic controls and windows to the options pane."""
 
 	bg1 = GameCheck.IsBG1 ()
@@ -113,8 +113,8 @@ def SetupMenuWindowControls (Window, Gears = None, CloseWindowCallback = None):
 		Button.OnPress (AIPress)
 		AIPress(0) #this initialises the state and tooltip
 
-		# Message popup FIXME disable on non game screen...
-		Button = InitOptionButton (Window, 'Expand', False) # or 41661 Close ...
+		# Big MessageWindow popup
+		InitOptionButton (Window, 'Expand', False)
 	else: ## pst lacks this control here. it is on the clock. iwd2 seems to skip it
 		# Return to Game
 		Button = InitOptionButton (Window, 'Return_To_Game')

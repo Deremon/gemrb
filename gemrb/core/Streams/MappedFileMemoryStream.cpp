@@ -1,9 +1,14 @@
 // SPDX-FileCopyrightText: 2020 Contributors to the GemRB project <https://gemrb.org>
 //
 // SPDX-License-Identifier: GPL-2.0-or-later
+
 #include <cassert>
 
-#ifndef WIN32
+#ifdef AMIGA
+	#include "../../../platforms/amiga/AmigaHelpers.h"
+#endif
+
+#if !defined(WIN32) && !defined(AMIGA)
 	#include <sys/mman.h>
 #endif
 
@@ -55,8 +60,12 @@ MappedFileMemoryStream::MappedFileMemoryStream(const std::string& fileName)
 #endif
 
 	if (fileOpened) {
+#ifdef AMIGA
+		fileMapped = AmigaMMap(fileHandle, size, data);
+#else
 		this->data = static_cast<char*>(readonly_mmap(fileHandle));
 		this->fileMapped = data != nullptr;
+#endif
 	}
 }
 
@@ -96,7 +105,11 @@ strret_t MappedFileMemoryStream::Write(const void*, strpos_t)
 MappedFileMemoryStream::~MappedFileMemoryStream()
 {
 	if (fileMapped) {
+#ifdef AMIGA
+		std::free(data);
+#else
 		munmap(data, size);
+#endif
 	}
 
 	this->data = nullptr;
