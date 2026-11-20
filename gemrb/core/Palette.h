@@ -44,7 +44,20 @@ public:
 		updateVersion();
 	}
 
-	bool HasAlpha() const noexcept { return true; /* Drop when SDL1 is gone. */ }
+	bool HasAlpha() const noexcept
+	{ /* Drop when SDL1 is gone. */
+		if (alphaVersion != version) {
+			bool anyNonOpaque = false;
+			bool allZero = true;
+			for (const auto& color : colors) {
+				if (color.a != 255) anyNonOpaque = true;
+				if (color.a != 0) allZero = false;
+			}
+			hasAlphaCached = anyNonOpaque && !allZero;
+			alphaVersion = version;
+		}
+		return hasAlphaCached;
+	}
 
 	bool operator==(const Palette&) const noexcept;
 	bool operator!=(const Palette&) const noexcept;
@@ -71,8 +84,10 @@ public:
 
 private:
 	Colors colors;
-	Hash version;
+	Hash version = 0;
 	bool named = false; // true if the palette comes from a bmp and cached
+	mutable bool hasAlphaCached = false;
+	mutable Hash alphaVersion = 0;
 
 	void updateVersion();
 };

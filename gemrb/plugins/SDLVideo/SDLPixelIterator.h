@@ -94,14 +94,20 @@ template<class BLENDER>
 static void Blit(SDLPixelIterator src,
 		 SDLPixelIterator dst, const SDLPixelIterator& dstend,
 		 IAlphaIterator& mask,
-		 const BLENDER& blender)
+		 const BLENDER& blender, bool dither = false)
 {
 	for (; dst != dstend; ++dst, ++src, ++mask) {
 		Color srcc, dstc;
 		src.ReadRGBA(srcc.r, srcc.g, srcc.b, srcc.a);
 		dst.ReadRGBA(dstc.r, dstc.g, dstc.b, dstc.a);
 
-		blender(srcc, dstc, *mask);
+		uint8_t maskval = *mask;
+		if (dither && maskval == 128) {
+			const Point& pos = dst.clip.origin + dst.Position();
+			maskval = ((pos.x + pos.y) & 1) ? 0 : 255;
+		}
+
+		blender(srcc, dstc, maskval);
 
 		dst.WriteRGBA(dstc.r, dstc.g, dstc.b, dstc.a);
 	}
@@ -109,15 +115,15 @@ static void Blit(SDLPixelIterator src,
 
 template<typename BLENDER>
 static void BlitBlendedRect(SDLPixelIterator& src, SDLPixelIterator& dst,
-			    BLENDER blender, IAlphaIterator* maskIt)
+			    BLENDER blender, IAlphaIterator* maskIt, bool dither = false)
 {
 	SDLPixelIterator dstend = SDLPixelIterator::end(dst);
 
 	if (maskIt) {
-		Blit(src, dst, dstend, *maskIt, blender);
+		Blit(src, dst, dstend, *maskIt, blender, dither);
 	} else {
 		StaticAlphaIterator alpha(0);
-		Blit(src, dst, dstend, alpha, blender);
+		Blit(src, dst, dstend, alpha, blender, dither);
 	}
 }
 

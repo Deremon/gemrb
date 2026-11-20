@@ -106,7 +106,26 @@ VideoBuffer* SDL12VideoDriver::NewVideoBuffer(const Region& r, BufferFormat fmt)
 	}
 }
 
-IAlphaIterator* SDL12VideoDriver::StencilIterator(BlitFlags flags, Region& maskclip) const
+static PixelFormat SourceFormatForSprite(SDL_Surface* surf, const Sprite2D* spr)
+{
+	PixelFormat fmt = PixelFormatForSurface(surf);
+	Holder<Palette> pal = spr->GetPalette();
+	if (spr->Format().Bpp == 1 && fmt.palette && pal && pal->HasAlpha()) {
+		// SDL1 palettes store RGB, per-palette alpha is lost when palette is applied to SDL surface
+		auto merged = MakeHolder<Palette>(*fmt.palette);
+		Palette::Colors cols;
+		const Color* alpha = pal->ColorData();
+		for (size_t i = 0; i < cols.size(); ++i) {
+			cols[i] = merged->GetColorAt(i);
+			cols[i].a = alpha[i].a;
+		}
+		merged->CopyColors(cols);
+		fmt.palette = std::move(merged);
+	}
+	return fmt;
+}
+
+IAlphaIterator* SDL12VideoDriver::StencilIterator(BlitFlags flags, Region maskclip) const
 {
 	struct SurfaceAlphaIterator : RGBAChannelIterator {
 		SDLPixelIteratorWrapper wrap;
@@ -280,7 +299,9 @@ void SDL12VideoDriver::BlitSpriteNativeClipped(const sprite_t* spr, const Region
 	IAlphaIterator* maskIt = StencilIterator(flags, drect);
 
 	SDL_Surface* surf = spr->GetSurface();
-	bool nativeBlit = (flags & ~(BlitFlags::HALFTRANS | BlitFlags::ALPHA_MOD | BlitFlags::BLENDED)) == 0 && maskIt == nullptr && ((surf->flags & SDL_SRCCOLORKEY) != 0 || (flags & BlitFlags::BLENDED) == 0);
+	Holder<Palette> pal = spr->GetPalette();
+	const bool paletteAlpha = spr->Format().Bpp == 1 && pal && pal->HasAlpha();
+	bool nativeBlit = !paletteAlpha && (flags & ~(BlitFlags::HALFTRANS | BlitFlags::ALPHA_MOD | BlitFlags::BLENDED)) == 0 && maskIt == nullptr && ((surf->flags & SDL_SRCCOLORKEY) != 0 || (flags & BlitFlags::BLENDED) == 0);
 	if (nativeBlit) {
 		SDL_Rect s = RectFromRegion(srect);
 		SDL_Rect d = RectFromRegion(drect);
@@ -289,7 +310,8 @@ void SDL12VideoDriver::BlitSpriteNativeClipped(const sprite_t* spr, const Region
 		SDLPixelIterator::Direction xdir = (flags & BlitFlags::MIRRORX) ? SDLPixelIterator::Reverse : SDLPixelIterator::Forward;
 		SDLPixelIterator::Direction ydir = (flags & BlitFlags::MIRRORY) ? SDLPixelIterator::Reverse : SDLPixelIterator::Forward;
 
-		auto src = MakeSDLPixelIterator(surf, xdir, ydir, srect);
+		PixelFormat srcFormat = SourceFormatForSprite(surf, spr);
+		SDLPixelIterator src(surf->pixels, surf->pitch, srcFormat, xdir, ydir, srect);
 		auto dst = MakeSDLPixelIterator(CurrentRenderBuffer(), SDLPixelIterator::Forward, SDLPixelIterator::Forward, drect);
 
 		BlitWithPipeline(src, dst, maskIt, flags, tint);
@@ -359,23 +381,23 @@ void SDL12VideoDriver::BlitWithPipeline(SDLPixelIterator& src, SDLPixelIterator&
 	if (flags & (BlitFlags::COLOR_MOD | BlitFlags::ALPHA_MOD)) {
 		if (flags & BlitFlags::GREY) {
 			RGBBlendingPipeline<SHADER::GREYSCALE, true> blender(tint, BlendFn);
-			BlitBlendedRect(src, dst, blender, maskIt);
+			BlitBlendedRect(src, dst, blender, maskIt, flags & BlitFlags::STENCIL_DITHER);
 		} else if (flags & BlitFlags::SEPIA) {
 			RGBBlendingPipeline<SHADER::SEPIA, true> blender(tint, BlendFn);
-			BlitBlendedRect(src, dst, blender, maskIt);
+			BlitBlendedRect(src, dst, blender, maskIt, flags & BlitFlags::STENCIL_DITHER);
 		} else {
 			RGBBlendingPipeline<SHADER::TINT, true> blender(tint, BlendFn);
-			BlitBlendedRect(src, dst, blender, maskIt);
+			BlitBlendedRect(src, dst, blender, maskIt, flags & BlitFlags::STENCIL_DITHER);
 		}
 	} else if (flags & BlitFlags::GREY) {
 		RGBBlendingPipeline<SHADER::GREYSCALE, true> blender(BlendFn);
-		BlitBlendedRect(src, dst, blender, maskIt);
+		BlitBlendedRect(src, dst, blender, maskIt, flags & BlitFlags::STENCIL_DITHER);
 	} else if (flags & BlitFlags::SEPIA) {
 		RGBBlendingPipeline<SHADER::SEPIA, true> blender(BlendFn);
-		BlitBlendedRect(src, dst, blender, maskIt);
+		BlitBlendedRect(src, dst, blender, maskIt, flags & BlitFlags::STENCIL_DITHER);
 	} else {
 		RGBBlendingPipeline<SHADER::NONE, true> blender(BlendFn);
-		BlitBlendedRect(src, dst, blender, maskIt);
+		BlitBlendedRect(src, dst, blender, maskIt, flags & BlitFlags::STENCIL_DITHER);
 	}
 }
 
